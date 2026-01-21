@@ -1,0 +1,10 @@
+{
+  "TaskID": 2026010501,
+  "Script": "yfinance_worker",
+  "Args": {
+    "Symbol": "2330.TW",
+    "Year": 2025,
+	"Begin": 0,
+    "Interval": "1d"
+  }
+}

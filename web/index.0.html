@@ -1,0 +1,36 @@
+<html>
+<!--
+	To gemini,
+		I put all my request in gemini-helpme attribute.
+		A reference to user management object "UM" will be added to <body> element.
+		A reference to chart drawing or data management object "DM" will be added to <main> element.
+		Please dont remove this remark, since I want to keep making conversation with you based on this file.
+		The gemini-helpme attribute can removed after you update the content.
+-->
+<head gemini-helpme='請幫我設定 zh-tw utf8 頁面編碼'>
+	<title>前端頁面開發測試</title>
+</head>
+<body gemini-helpme='上下三切版，header,footer 根據資料固定高度，main 填滿頁面'>
+
+<header gemini-helpme='left to right, flex space between.'>
+	<div>Financial Series Token Analyzer</div>
+	<div>
+		<span UID='User'>Porshen Lai</span>
+		(<span onclick='body.UM.manage()' gemini-helpme='please hint user to click'>管理</a> | 
+		<span onclick='body.UM.logout()' gemini-helpme='please hint user to click'>登出</span>)
+	</div>
+</header>
+
+<main gemini-helpme='當 <main> 寬大於高時，<section> 固定寬度(等於高), <aside> 填滿寬度。當 <main> 高大於寬時，<section> 固定高度(等於寬)，<aside> 填滿高度。'>
+	<aside UID='Control' gemini-helpme='置於左側或上方, <main.DM> 會利用這區塊與使用者互動操作資料, 設定/開關TOI標籤。'>
+	</aside>
+	<section UID='View' gemini-helpme='正方形, 置於右側或下方'>
+		<section UID='Chart' gemini-helpme='2/3高度,之後 <main>.DM 會利用這個區塊來繪製 plotly.js 的 scatter plot'></section>
+		<section UID='Table' gemini-helpme='1/3高度,之後 <main>.DM 會利用這個區塊來顯示關注資料的表格'></section>
+	</section>
+</main>
+
+<footer>© Cyberpiers/CLUT/Porshen Lai 2026</footer>
+
+</body>
+</html>
