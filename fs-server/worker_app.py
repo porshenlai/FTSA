@@ -3,7 +3,7 @@ import signal
 import sys
 import os
 
-## gemini-helpme:
+#@Gemini:
 ## 1. 監聽 SIGUSR1 信號。
 ## 2. 接收信號後，透過 API 向 Hub 索取任務。
 ## 3. 執行完畢後透過 POST API 回報結果。
