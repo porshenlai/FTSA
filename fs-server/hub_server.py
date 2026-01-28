@@ -30,12 +30,16 @@ class HubServer:
 		self.worker_pid = int(os.environ.get("WORKER_PID", 0))
 		# 資料庫根目錄
 		self.db_root = "db/"
+		self.doc_root = "docs/"
+		if not os.path.exists(self.doc_root):
+			os.makedirs(self.doc_root)
+
 		# 運行中 syncer 的資料表
 		self.syncer_db = os.path.join(self.db_root, "syncer.db")
 		self.max_syncer_retry = 3
 		# 可允許最大同時開啟的當年度快取資料庫數量
 		self.max_db_caches = 3
-		self.db_caches = {} # 改用 dict 儲存 { "symbol_year": connection }
+		self.db_caches = {} 
 		
 		self._init_db()
 
@@ -56,7 +60,7 @@ class HubServer:
 					symbol TEXT,
 					year INTEGER,
 					begin INTEGER,
-					status TEXT, -- Pending, Running, Success, Fail, or Retry Count
+					status TEXT,
 					created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 				)
 			""")
@@ -65,15 +69,15 @@ class HubServer:
 	async def db2json(self, db_name, json_path=None):
 		""" 將 db 儲存的年度資料表格轉換成 JSON 檔案，並回傳 List """
 		db_path = os.path.join(self.db_root, db_name)
-		
+
 		# 簡單起見，這裡直接開關連線，若要高效能可整合進 self.db_caches
 		conn = sqlite3.connect(db_path)
 		cursor = conn.cursor()
-		
+
 		# 取得所有欄位
 		cursor.execute("SELECT D, C, O, H, L, V, X FROM price_data ORDER BY D ASC")
 		rows = cursor.fetchall()
-		
+
 		data_list = [None] * 366
 		for r in rows:
 			d_idx = r[0] # D 是索引 (第幾天)
@@ -85,7 +89,7 @@ class HubServer:
 				}
 				day_data.update(extra)
 				data_list[d_idx] = day_data
-		
+
 		conn.close()
 
 		if json_path:
@@ -95,7 +99,7 @@ class HubServer:
 			# 轉換完成後刪除 DB
 			if os.path.exists(db_path):
 				os.remove(db_path)
-		
+
 		return data_list
 
 	async def schedule_task(self, symbol, year, begin):
@@ -127,7 +131,7 @@ class HubServer:
 		this_year = datetime.now().year
 		json_file = f"{symbol}_{year}.json"
 		db_file = f"{symbol}_{year}.db"
-		
+
 		json_path = os.path.join(self.db_root, json_file)
 		db_path = os.path.join(self.db_root, db_file)
 
@@ -135,10 +139,10 @@ class HubServer:
 			if os.path.exists(json_path):
 				async with aiofiles.open(json_path, mode='r') as f:
 					return json.loads(await f.read())
-			
+
 			if os.path.exists(db_path):
 				return await self.db2json(db_file, json_file)
-			
+
 			await self.schedule_task(symbol, year, 0)
 			return "Pending"
 		else:
@@ -148,11 +152,11 @@ class HubServer:
 				with sqlite3.connect(db_path) as conn:
 					res = conn.execute("SELECT MAX(D) FROM price_data").fetchone()
 					max_date = res[0] if res and res[0] is not None else 0
-			
+
 			today_day_of_year = datetime.now().timetuple().tm_yday
 			if os.path.exists(db_path) and max_date >= today_day_of_year - 1:
 				return await self.db2json(db_file) # 不轉 json 檔，因為還會更新
-			
+
 			await self.schedule_task(symbol, year, max_date)
 			return "Pending"
 
@@ -166,19 +170,31 @@ class HubServer:
 		except Exception as e:
 			return web.json_response({"status": "Error", "message": str(e)}, status=400)
 
+	async def handle_list_task(self, request):
+		"""處理任務追蹤表的資料列出請求"""
+		with sqlite3.connect(self.syncer_db) as conn:
+			# 設定 row_factory 以便回傳字典格式
+			conn.row_factory = sqlite3.Row
+			cursor = conn.cursor()
+			cursor.execute("SELECT task_id, symbol, year, begin, status, created_at FROM tasks ORDER BY created_at DESC")
+			rows = cursor.fetchall()
+
+			# 將 sqlite3.Row 轉為 list of dict
+			tasks = [dict(row) for row in rows]
+			return web.json_response({"status": "Success", "tasks": tasks})
+
 	async def handle_get_task(self, request):
 		"""處理 Worker 任務要求"""
 		with sqlite3.connect(self.syncer_db) as conn:
 			cursor = conn.cursor()
 			cursor.execute("SELECT task_id, symbol, year, begin FROM tasks WHERE status='Pending' LIMIT 1")
 			row = cursor.fetchone()
-			
 			if row:
 				task_id, symbol, year, begin = row
 				cursor.execute("UPDATE tasks SET status='Running' WHERE task_id=?", (task_id,))
 				conn.commit()
 				return web.json_response({
-					"TaskID": task_id, 
+					"TaskID": task_id,
 					"Script": "yfinance_worker",
 					"Args": { "Symbol": symbol, "Year": year, "Begin": begin, "Interval": "1d" }
 				})
@@ -245,7 +261,11 @@ class HubServer:
 
 	def make_app(self):
 		app = web.Application()
-		app.router.add_get('/data', self.handle_get_data)
+		# 靜態檔案分享 (例如存取 http://localhost:8081/index.html)
+		# 注意：此處 show_index=True 允許列出目錄
+		app.router.add_static('/', self.doc_root, show_index=True)
+		app.router.add_get('/dapi', self.handle_get_data)
+		app.router.add_post('/api/list', self.handle_list_task)
 		app.router.add_post('/api/request', self.handle_get_task)
 		app.router.add_post('/api/commit', self.handle_commit_task)
 		return app
@@ -253,4 +273,5 @@ class HubServer:
 if __name__ == "__main__":
 	hub = HubServer()
 	app = hub.make_app()
+	print("Server starting at http://localhost:8081")
 	web.run_app(app, port=8081)

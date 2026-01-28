@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Stock Data Hub Test</title>
+	<style>
+		table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+		th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+		th { background-color: #f2 f2 f2; }
+		.pending { color: orange; font-weight: bold; }
+	</style>
+</head>
+<body>
+	<div id="monitorPanel" style="background: #f9f9f9; padding: 15px; border: 1px solid #ccc; margin-bottom: 20px;">
+		<h3>Task Monitor Panel</h3>
+		<table id="taskTable">
+			<thead>
+				<tr>
+					<th>Task ID</th>
+					<th>Symbol</th>
+					<th>Year</th>
+					<th>Begin</th>
+					<th>Status</th>
+					<th>Created At</th>
+				</tr>
+			</thead>
+			<tbody id="taskBody">
+				</tbody>
+		</table>
+	</div>
+
+	<h2>Stock Data Query</h2>
+	<script>
+		// @Gemini: 實作自動更新監控面板的邏輯
+		async function updateMonitor() {
+			try {
+				const resp = await fetch('/api/list', { method: 'POST' });
+				const res = await resp.json();
+				if (res.status === "Success") {
+					const tbody = document.getElementById('taskBody');
+					tbody.innerHTML = "";
+					res.tasks.forEach(task => {
+						const row = `<tr>
+							<td>${task.task_id}</td>
+							<td>${task.symbol}</td>
+							<td>${task.year}</td>
+							<td>${task.begin}</td>
+							<td class="${task.status === 'Pending' ? 'pending' : ''}">${task.status}</td>
+							<td>${task.created_at}</td>
+						</tr>`;
+						tbody.innerHTML += row;
+					});
+				}
+			} catch (e) {
+				console.error("Monitor update failed", e);
+			}
+		}
+
+		async function fetchData() {
+			const sid = document.getElementById('stockId').value;
+			const year = document.getElementById('year').value;
+			const statusDiv = document.getElementById('status');
+			const table = document.getElementById('dataTable');
+			const tbody = document.getElementById('tableBody');
+			
+			statusDiv.innerText = "Loading...";
+			table.style.display = "none";
+			tbody.innerHTML = "";
+
+			try {
+				// 格式: /dapi?2330_TW-2025
+				const resp = await fetch(`/dapi?${sid}_TW-${year}`);
+				const res = await resp.json();
+				
+				if (res.data === "Pending") {
+					statusDiv.innerHTML = '<span class="pending">Task Scheduled. Please refresh later.</span>';
+				} else if (res.status === "Success" && Array.isArray(res.data)) {
+					statusDiv.innerText = `Displaying data for ${sid} (${year})`;
+					table.style.display = "table";
+					res.data.forEach((day, index) => {
+						if (!day) return;
+						const row = `<tr>
+							<td>${index}</td><td>${day.C}</td><td>${day.O}</td>
+							<td>${day.H}</td><td>${day.L}</td><td>${day.V}</td>
+						</tr>`;
+						tbody.innerHTML += row;
+					});
+				} else {
+					statusDiv.innerText = "Error: " + (res.message || "Unknown error");
+				}
+			} catch (e) {
+				statusDiv.innerText = "Fetch failed: " + e.message;
+			}
+		}
+
+		// 每 3 秒自動更新一次監控面板
+		setInterval(updateMonitor, 3000);
+		// 頁面載入時先執行一次
+		updateMonitor();
+	</script>
+</body>
+</html>
