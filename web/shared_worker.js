@@ -33,21 +33,22 @@ onconnect = function (e) {
     port.start();
 };
 
-async function handleFetchData({ symbol, year }) {
-    const key = `${symbol}_${year}`;
-    if (cacheL1.has(key)) return cacheL1.get(key);
+async function handleFetchData({ symbol, year, key }) {
+    const qs = `${symbol}-${year}`;
+    if (cacheL1.has(qs)) return cacheL1.get(qs);
 
     try {
         // 呼叫您的 Hub Server API
-        const response = await fetch(`http://localhost:8081/data?${key}`);
+        const response = await fetch(`http://localhost:8081/dapi?${qs}`);
         const data = await response.json();
         
         if (data.status === "Success") {
-            cacheL1.set(key, data.data);
+            cacheL1.set(qs, data.data);
         }
+		data.key=key;
         return data;
     } catch (err) {
-        return { status: "Error", message: err.message };
+        return { status: "Error", message: err.message, key:key };
     }
 }
 

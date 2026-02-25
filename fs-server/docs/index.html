@@ -1,12 +1,16 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant-TW">
 <head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Stock Data Hub Test</title>
 	<style>
 		table { border-collapse: collapse; width: 100%; margin-top: 20px; }
 		th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
 		th { background-color: #f2 f2 f2; }
 		.pending { color: orange; font-weight: bold; }
+		select,input { font-size:100%; }
+		.hidden { display:none; }
 	</style>
 </head>
 <body>
@@ -14,7 +18,7 @@
 		<h3>Task Monitor Panel</h3>
 		<table id="taskTable">
 			<thead>
-				<tr>
+				<tr tbsync>
 					<th>Task ID</th>
 					<th>Symbol</th>
 					<th>Year</th>
@@ -24,12 +28,96 @@
 				</tr>
 			</thead>
 			<tbody id="taskBody">
-				</tbody>
+			</tbody>
 		</table>
 	</div>
 
 	<h2>Stock Data Query</h2>
+	<div PID="StockQuery" style='border:2px solid silver;padding:4px;overflow:hidden;'>
+		<div style="height:32px;overflow:hidden;">
+			目標代號 <select varname="symbol">
+				<option value='-'>請選擇</option>
+				<option value='2330.TW'>台積電</option>
+			</select>，
+			從 <input varname="from" type="date"/> 到 <input varname="to" type="date"/>
+			<button act="requestData">請求資料</button>
+		</div>
+		<div UID="Result" class="hidden">
+			<table border="1" cellspacing="0" cellpadding="3" width="95%" align="center"><thead><tr>
+				<th>Date</th><th>Close</th><th>Open</th><th>High</th><th>Low</th><th>Volume</th>
+			</tr></thead><tbody style="display:none;" UID="Template"><tr>
+				<th vn="D"></th><td vn="C"></td><td vn="O"></td><td vn="H"></td><td vn="L"></td><td vn="V"></td>
+			</tr></tbody><tbody UID="List">
+			</tbody></table>
+		</div>
+		<div UID="Status"></div>
+	</div>
+		
+	<script src="data.js"></script>
 	<script>
+		let DB={};
+		document.body.querySelector('[varname="to"]').value=(new Date()).toISOString().substr(0,10);
+		document.body.addEventListener('click',(evt)=>{ // {{{
+			try {
+				let p,e; 
+				for(e=evt.target;!e.hasAttribute("act");e=e.parentNode);
+				switch(e.getAttribute('act')){
+				case 'requestData':
+					try {
+						for (p=e;p.getAttribute("PID")!=="StockQuery";p=p.parentNode) ;
+						e.disabled=true;
+						let e_status=p.querySelector('[UID="Status"]');
+						e_status.textContent="Requesting ...";
+						p.querySelector('[UID="Result"]').classList.remove("hidden");
+
+						((vars) => {
+							const sid = vars.symbol;
+							if (!DB[sid]) DB[sid]=new SData(sid);
+							return DB[sid].get(vars.from,vars.to);
+						})(Array.from(p.querySelectorAll('[varname]')).reduce((r,e)=>{
+							r[e.getAttribute("varname")]=((e)=>{
+								switch(e.getAttribute("type")){
+								case "month": return new Date(e.value+"-1");
+								case "date": return new Date(e.value);
+								default: return e.value;
+								}
+							})(e);
+							return r;
+						},{})).then((results)=>{
+							if (results) {
+								if (results.error) {
+									e_status.innerHTML=results.error;
+									p.querySelector('[UID="Result"]').classList.add("hidden");
+									// DEBUG
+									console.log("DEBUG");
+									e.disabled=false;
+								} else {
+									const canvas=p.querySelector('[UID="List"]'),
+												temp=p.querySelector('[UID="Template"]');
+									while(canvas.firstChild) canvas.removeChild(canvas.firstChild);
+									Object.keys(results).forEach((k)=>{
+											let ne=temp.firstChild.cloneNode(true);
+											Array.from(ne.querySelectorAll('[vn]')).forEach((e)=>{
+													const an=e.getAttribute("vn");
+													e.textContent=an==="D"?k:results[k][an];
+											});
+											canvas.appendChild(ne);
+									});
+									e_status.innerHTML="";
+									e.disabled=false;
+								}
+							} else {
+								e_status.innerHTML="Error.";
+							}
+						});
+					} catch(x) {
+						e.disabled=false;
+						e_status.innerHTML="Error("+x+")";
+					}
+					break;
+				}
+			} catch { }
+		});	// addEventListener(click) }}}
 		// @Gemini: 實作自動更新監控面板的邏輯
 		async function updateMonitor() {
 			try {
@@ -54,44 +142,6 @@
 				console.error("Monitor update failed", e);
 			}
 		}
-
-		async function fetchData() {
-			const sid = document.getElementById('stockId').value;
-			const year = document.getElementById('year').value;
-			const statusDiv = document.getElementById('status');
-			const table = document.getElementById('dataTable');
-			const tbody = document.getElementById('tableBody');
-			
-			statusDiv.innerText = "Loading...";
-			table.style.display = "none";
-			tbody.innerHTML = "";
-
-			try {
-				// 格式: /dapi?2330_TW-2025
-				const resp = await fetch(`/dapi?${sid}_TW-${year}`);
-				const res = await resp.json();
-				
-				if (res.data === "Pending") {
-					statusDiv.innerHTML = '<span class="pending">Task Scheduled. Please refresh later.</span>';
-				} else if (res.status === "Success" && Array.isArray(res.data)) {
-					statusDiv.innerText = `Displaying data for ${sid} (${year})`;
-					table.style.display = "table";
-					res.data.forEach((day, index) => {
-						if (!day) return;
-						const row = `<tr>
-							<td>${index}</td><td>${day.C}</td><td>${day.O}</td>
-							<td>${day.H}</td><td>${day.L}</td><td>${day.V}</td>
-						</tr>`;
-						tbody.innerHTML += row;
-					});
-				} else {
-					statusDiv.innerText = "Error: " + (res.message || "Unknown error");
-				}
-			} catch (e) {
-				statusDiv.innerText = "Fetch failed: " + e.message;
-			}
-		}
-
 		// 每 3 秒自動更新一次監控面板
 		setInterval(updateMonitor, 3000);
 		// 頁面載入時先執行一次

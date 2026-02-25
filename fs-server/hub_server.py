@@ -191,20 +191,24 @@ class HubServer:
 			row = cursor.fetchone()
 			if row:
 				task_id, symbol, year, begin = row
-				cursor.execute("UPDATE tasks SET status='Running' WHERE task_id=?", (task_id,))
+				# cursor.execute("UPDATE tasks SET status='Running' WHERE task_id=?", (task_id,))
 				conn.commit()
 				return web.json_response({
 					"TaskID": task_id,
-					"Script": "yfinance_worker",
+					"Script": "yfinance",
 					"Args": { "Symbol": symbol, "Year": year, "Begin": begin, "Interval": "1d" }
 				})
 		return web.json_response({})
 
 	async def handle_commit_task(self, request):
 		"""處理 Worker 任務回報"""
-		payload = await request.json()
+		print(request.query);
 		task_id = request.query.get("taskID")
-		data = payload.get("data") # 假設 Worker 把結果放在 data 欄位，失敗則為 "FAILED"
+		data = await request.json() # {data} or "FAILED"
+		print(type(data),data)
+
+		if not data :
+			return
 
 		with sqlite3.connect(self.syncer_db) as conn:
 			cursor = conn.cursor()
@@ -239,11 +243,18 @@ class HubServer:
 							D INTEGER PRIMARY KEY, C REAL, O REAL, H REAL, L REAL, V INTEGER, X TEXT
 						)
 					""")
+					count = -1
 					for item in data:
+						count += 1
+						if item == 0 : continue
 						# 這裡假設 Worker 回傳格式符合表格欄位
 						# 處理 X 欄位：扣除基本欄位後轉 JSON
 						base_keys = {'D', 'C', 'O', 'H', 'L', 'V'}
 						extra_data = {k: v for k, v in item.items() if k not in base_keys}
+						for k in base_keys :
+							if k not in item : item[k] = 0
+						item['D'] = count
+						print('ITEM is ',item);
 						data_conn.execute(
 							"INSERT OR REPLACE INTO price_data (D, C, O, H, L, V, X) VALUES (?,?,?,?,?,?,?)",
 							(item['D'], item['C'], item['O'], item['H'], item['L'], item['V'], json.dumps(extra_data))
