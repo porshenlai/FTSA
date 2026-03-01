@@ -11,12 +11,13 @@ from datetime import datetime
 ## 4. 透過 Callback URI 回報結果。
 
 def main():
-	# 從標準輸入讀取任務描述
-	args = sys.stdin.read()
-	print(args,file=sys.stderr)
-	args = json.loads(args)
-	
-	print(f"正在處理任務 {args}",file=sys.stderr)
+	args={}
+	for arg in sys.argv[1:] :
+		if not arg : continue
+		arg=arg.split("=")
+		args[arg[0]]=arg[1]
+
+	print(f"正在處理任務 {args}", file=sys.stderr)
 
 	try:
 		# 抓取數據

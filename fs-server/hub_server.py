@@ -161,7 +161,7 @@ class HubServer:
 			return "Pending"
 
 	async def handle_get_data(self, request):
-		"""處理前端資料請求: ?2330_TW-2025"""
+		"""處理前端資料請求: ?2330.TW-2025"""
 		query = request.query_string
 		try:
 			tid, yid = query.split('-')
@@ -195,17 +195,15 @@ class HubServer:
 				conn.commit()
 				return web.json_response({
 					"TaskID": task_id,
-					"Script": "yfinance",
+					"Script": "yf",
 					"Args": { "Symbol": symbol, "Year": year, "Begin": begin, "Interval": "1d" }
 				})
 		return web.json_response({})
 
 	async def handle_commit_task(self, request):
 		"""處理 Worker 任務回報"""
-		print(request.query);
 		task_id = request.query.get("taskID")
 		data = await request.json() # {data} or "FAILED"
-		print(type(data),data)
 
 		if not data :
 			return
@@ -254,7 +252,6 @@ class HubServer:
 						for k in base_keys :
 							if k not in item : item[k] = 0
 						item['D'] = count
-						print('ITEM is ',item);
 						data_conn.execute(
 							"INSERT OR REPLACE INTO price_data (D, C, O, H, L, V, X) VALUES (?,?,?,?,?,?,?)",
 							(item['D'], item['C'], item['O'], item['H'], item['L'], item['V'], json.dumps(extra_data))
@@ -274,11 +271,11 @@ class HubServer:
 		app = web.Application()
 		# 靜態檔案分享 (例如存取 http://localhost:8081/index.html)
 		# 注意：此處 show_index=True 允許列出目錄
-		app.router.add_static('/', self.doc_root, show_index=True)
 		app.router.add_get('/dapi', self.handle_get_data)
 		app.router.add_post('/api/list', self.handle_list_task)
 		app.router.add_post('/api/request', self.handle_get_task)
 		app.router.add_post('/api/commit', self.handle_commit_task)
+		app.router.add_static('/', self.doc_root, show_index=True)
 		return app
 
 if __name__ == "__main__":

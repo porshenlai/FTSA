@@ -26,7 +26,7 @@ class Data extends Base {
 		}, this);
 	}	// import
 	async fetch (sid, year) {
-		// 格式: /dapi?2330_TW-2025
+		// 格式: /dapi?2330.TW-2025
 		const resp = await fetch(`/dapi?${sid}-${year}`);
 		if (resp.status!==200) return {"error":"Bad Request"};
 		return await resp.json();

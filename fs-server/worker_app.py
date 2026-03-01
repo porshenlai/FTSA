@@ -56,14 +56,17 @@ class WorkerApp:
 
 				print(f"[*] 領取任務 {task_id} -> {script_name}")
 
-				script_path = os.path.join("syncer", f"{script_name}.py")
+				script_path = [os.path.join("syncer", f"{script_name}.py")]
 				
-				if not os.path.exists(script_path):
+				if not os.path.exists(script_path[0]):
 					output, returncode = f"Error: {script_path} not found.", 1
 				else:
+					for kn in args :
+						script_path.append(kn+"="+str(args[kn]))
+
 					# 使用 subprocess 執行，並捕獲輸出
 					process = await asyncio.create_subprocess_exec(
-						sys.executable, script_path, json.dumps(args),
+						sys.executable, *script_path, "",
 						stdout=asyncio.subprocess.PIPE,
 						stderr=asyncio.subprocess.PIPE
 					)
@@ -71,7 +74,6 @@ class WorkerApp:
 					output = stdout.decode().strip() or stderr.decode().strip()
 					if output != "FAILED" :
 						output = json.loads(output)
-					print("OUTPUT",output)
 					returncode = process.returncode
 
 				# 3. 回報結果 (增加簡單的失敗重試)
@@ -99,8 +101,8 @@ class WorkerApp:
 			loop.add_signal_handler(signal.SIGUSR1, self.handle_signal)
 		else:
 			# 開發環境模擬
-			async def debug_input():
-				while True:
+			async def debug_input() :
+				while True :
 					await loop.run_in_executor(None, sys.stdin.readline)
 					self.trigger_tasks()
 			asyncio.create_task(debug_input())

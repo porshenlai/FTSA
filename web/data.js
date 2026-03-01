@@ -1,13 +1,14 @@
 (()=>{
 
 class Base {
-	getDS(yr,yd) {
+	getDS(yr,yd)
+	{	// format datecode 20260228 {{{
 		if (yd) {
 			yr=new Date(yr,0,1);
 			yr.setDate(yd);
 		} else if ('string'===typeof(yr)) yr=new Date(yr);
 			return yr.getFullYear()*10000+(yr.getMonth()+1)*100+yr.getDate();
-	}	// getDS
+	}	// getDS }}}
 }
 class Data extends Base {
 	constructor (sid) {
@@ -26,7 +27,7 @@ class Data extends Base {
 		}, this);
 	}	// import
 	async fetch (sid, year) {
-		// 格式: /dapi?2330_TW-2025
+		// 格式: /dapi?2330.TW-2025
 		const resp = await fetch(`/dapi?${sid}-${year}`);
 		if (resp.status!==200) return {"error":"Bad Request"};
 		return { "data": await resp.json() };

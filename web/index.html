@@ -97,10 +97,10 @@
 		section[UID='Chart'] {
 			height: 90%;
 			width: 100%;
-			overflow: hidden;
+			overflow: auto hidden;
 			border-bottom: 2px solid #eee;
 			position: relative;
-			background: darkblue;
+			background: black;
 		}
 
 		section[UID='Table'] {
@@ -111,16 +111,8 @@
 		}
 
 		[UID="Canvas"] {
-			position:relative;
-			top:0; height:100%;
-			left:0; min-width:100%;
-			width: 1000px;
-		}
-
-		[UID="Canvas"]>div {
-			position:absolute;
-			left:0; top:0; width:100%; height:100%;
-			background: transparent;
+    		transform-origin: 50% 50%; /* center of rotation is set to the center of the element */
+    		transform: scale(1,-1);
 		}
 
 		.hidden {
@@ -132,8 +124,13 @@
 			text-decoration: underline;
 			color: #3498db;
 		}
+
+		.nvalue { display:flex;justify-content:space-between; }
+		[TagValue] { border-bottom:1px solid darkblue; display:flex;justify-content:space-between; }
+		[TagValue] button { color:red; }
 	</style>
-	<script src='Data.js'></script>
+	<script src='data.js'></script>
+	<script src='chart.js'></script>
 </head>
 <body>
 
@@ -148,29 +145,48 @@
 
 <main>
 	<aside UID='Control'>
-		<strong>控制面板</strong>
-		<hr>
-		<p>設定與 TOI 標籤管理區</p>
+		<div UID="RecordData" style='border:1px solid silver;padding:4px;margin:4px 0;'>
+			<div class='nvalue'><b>Date:</b><span fn='D'></span></div>
+			<div class='nvalue'><b>Close/Open:</b><span><span fn="C"></span> / <span fn='O'></span></span></div>
+			<div class='nvalue'><b>High/Low:</b><span><span fn='H'></span> / <span fn='L'></span></span></div>
+			<div class='nvalue'><b>Volume:</b><span fn='V'></span></div>
+		</div>
+		<div>Zoom: <input UID='ZoomControl' type='number' min='1' step='1' value='1' onchange='App.Chart.zoom(this.value)' style='text-align:center;'></input></div>
+		<div UID="ChartTick"
+			onchange='App.Chart.syncAPlots(Array.from(this.querySelectorAll("[CID]")))'
+			style='border:1px solid silver;padding:4px;margin:4px 0;background:black;'>
+			<div style='display:flex;flex-flow:row wrap;'>
+				<span style="color:pink"><input type="checkbox" CID="EMA.5"/>EMA(週)</span>
+				<span style="color:lightgreen"><input type="checkbox" CID="EMA.20"/>EMA(月)</span>
+				<span style="color:lightblue"><input type="checkbox" CID="EMA.60"/>EMA(季)</span>
+				<span style="color:orange"><input type="checkbox" CID="SMA.5"/>SMA(週)</span>
+				<span style="color:yellow"><input type="checkbox" CID="SMA.20"/>SMA(月)</span>
+				<span style="color:cyan"><input type="checkbox" CID="SMA.60"/>SMA(季)</span>
+			</div>
+			<div style='display:flex;flex-flow:row wrap;'>
+				<span style="color:lightgreen"><input type="checkbox" CID="MACD.12.26.9"/>MACD</span>
+			</div>
+		</div>
+		<div UID="Tags" style='border:1px solid silver;padding:4px;margin:4px 0;'>
+			<div><button act='addTag'>加入</button> TOI 標籤管理區</div><hr/>
+			<div UID="List">
+			</div>
+		</div>
 	</aside>
 	<section UID='View'>
 		<section UID='Chart'>
-			<div UID='Canvas'>
-				<div>Layer-1</div>
-				<div>Layer-2</div>
-				<div>Layer-3</div>
-				<div>Layer-4</div>
-			</div>
+			<svg UID='Canvas'></svg>
 		</section>
 		<section UID='Table'>
+			<datalist id="StockIDs">
+				<option>2330.TW 台積電</option>
+			</datalist>
 			<div style="text-align:center;">
-				目標代號 <select varname="symbol">
-					<option value='-'>請選擇</option>
-					<option value='2330.TW'>台積電</option>
-				</select>，
-				從 <input varname="from" type="date"/> 到 <input varname="to" type="date"/>
+				目標代號 <input varname='symbol' type="text" list='StockIDs'></input>
+				從 <input varname="from" type="date" value='2025-01-01'/> 到 <input varname="to" type="date" value='2025-12-30'/>
 				<button act="requestData">請求資料</button>
 			</div>
-			<table class='hidden' border='1' cellspacing='3' cellpadding='1' align='center'>
+			<table class='hidden' border='1' cellspacing='3' cellpadding='1' width='98%' align='center'>
 				<thead><tr>
 					<th vn='D'>Date</th>
 					<th vn='C'>Close</th>
@@ -196,17 +212,100 @@
 <footer>© Cyberpiers/CLUT/Porshen Lai 2026</footer>
 
 <script>
-	class Chart {
-		constructor (re, ds) {
-			this.RE = re;
-			this.Ds = ds;
-		}
-		addLayer (atn) {
 
+	class StkChart extends window.Chart {
+		printValues (s) {
+			let k=Object.keys(App.CVs),v;
+			k=k[parseInt(k.length*s)];
+			v=Object.assign({"D":k},App.CVs[k]);
+			Array.from(document.body.querySelector('[UID="RecordData"]').querySelectorAll('[fn]'))
+			.forEach((e) => { e.textContent=v[e.getAttribute('fn')]; });
+		}
+		syncAPlots (cks) {
+			if (!App.CVs) return;
+			App.Chart.clear("A");
+			cks.forEach((ck)=>{
+				const args= ck.getAttribute("CID").split('.');
+				const task= App["get"+args[0]];
+				const draw= (("plot"+args[0]) in App.Chart) ? ("plot"+args[0]) : "plotLine" ;
+				args[0]=Object.values(App.CVs).map((row)=>row.C)
+				if (ck.checked)
+					App.Chart[draw](task.apply(App,args),ck.parentNode.style.color);
+			});
+		}
+		plotMACD (d, color)
+		{	// {{{
+			console.log("MACD data is ",d);
+		}	// }}}
+	}
+
+	class StkData extends window.SData {
+		async fetch (sid, year) {
+			sid=sid.trim().replaceAll(/ .*/g,'');
+			return { "data": await Service.requestData(sid,year) }
 		}
 	}
 
-	let chart=undefined;
+	App = {
+		DB: {},
+		CVs: {},
+		Chart: new StkChart(document.querySelector('[UID="Canvas"]'),[]),
+		getSMA: function(d, window=5)
+		{ 	// 計算滑動平均 (SMA) {{{
+			// @param {number} window - 視窗寬度 (5, 20, 60)
+			// @returns {Array} - 長度與 data d 相同的陣列，未滿 window 處補 null 或 0
+			if (d.length === 0) return [];
+
+			let result = new Array(d.length).fill(Math.min(...d));
+			for (let i=0,sum=0; i<d.length; i++) {
+				sum += d[i];			// 加上新進入 window 的值
+				if (i >= window)		// 如果 index 超過 window 寬度，減去離開 window 的舊值
+					sum -= d[i - window];
+				if (i >= window - 1)	// 當資料量足夠填滿一個 window 時，計算平均並填入
+					result[i] = sum / window;
+			}
+			return result;
+		},	// }}}
+		getEMA (d, window=12)
+		{	// 計算指數移動平均 (EMA) {{{
+			// @param {number} window - 天數 (如 12, 26)
+			// @returns {Array} - EMA 數值陣列
+			if (d.length === 0) return [];
+	
+			let result = new Array(d.length);
+			const alpha = 2 / (window + 1);
+
+			// 1. 第一筆 EMA 通常直接用第一筆價格，或是用前 N 筆的 SMA 作為起點
+			let ema = d[0];
+			result[0] = ema;
+			for (let i=1; i<d.length; i++) {
+				// 2. 遞迴計算：今日 EMA = (今日價格 - 昨日 EMA) * alpha + 昨日 EMA
+				ema = (d[i] - ema) * alpha + ema;
+				result[i] = ema;
+			}
+			return result;
+		},	// }}}
+		getMACD (d, short=12, long=26, signal=9)
+		{	// 計算 MACD 指標 {{{
+			// @param {number} short - 快線週期 (預設 12)
+			// @param {number} long - 慢線週期 (預設 26)
+			// @param {number} signal - 訊號線週期 (預設 9)
+			// @returns {Object} - 包含 dif, dea, hist 陣列
+
+			const emaShort = this.getEMA(d, short);
+			const emaLong = this.getEMA(d, long);
+	
+			// 1. 計算 DIF (快線 - 慢線)
+			const dif = emaShort.map((s,i) => s - emaLong[i]);
+			// 2. 計算 DEA (DIF 的 EMA)
+			const dea = this.getEMA(dif,signal);
+			// 3. 計算 Histogram (MACD 柱狀值)
+			// 通常公式是 (DIF - DEA) * 2，乘以 2 是為了讓圖表視覺更明顯
+			const hist = dif.map((d,i) => (d - dea[i]) * 2);
+	
+			return { dif, dea, hist };
+		}	// }}}
+	};
 
 	const Service = {
 		worker: null,
@@ -265,19 +364,32 @@
 		// 資料管理物件後續實作
 	};
 
-	class StkData extends window.SData {
-		async fetch (sid, year) {
-			return { "data": await Service.requestData(sid,year) }
-		}
-	}
-
-	let DB={};
-
 	document.body.addEventListener('click', (evt) => { // {{{
 		try {
 			let p,e; 
 			for(e=evt.target; !e.hasAttribute("act"); e=e.parentNode);
 			switch (e.getAttribute('act')) {
+			case 'addTag':
+				((list)=>{
+					if (!list.Data) list.Data=[];
+					let key= document.body.querySelector('[UID="RecordData"] [fn="D"]').textContent;
+					list.Data=list.Data.filter((v)=>v!==key);
+					list.Data.push(key);
+					list.Data=list.Data.sort();
+					App.Chart.clear('T');
+					list.innerHTML=list.Data.reduce((r,v)=>{
+						App.Chart.plotTag(Object.keys(App.CVs).indexOf(v));
+						return r+`<div TagValue="${v}"><button act="removeTag">X</button><span>${v}</span></div>`
+					},"");
+				})(document.body.querySelector('[UID="Tags"] [UID="List"]'));
+				break;
+			case 'removeTag':
+				((list)=>{
+					let key=e.parentNode.getAttribute("TagValue");
+					list.Data=list.Data.filter((v)=>v!==key);
+					list.removeChild(e.parentNode);
+				})(document.body.querySelector('[UID="Tags"] [UID="List"]'));
+				break;
 			case 'requestData':
 				try {
 					for (p=e; p.getAttribute("UID")!=="Table"; p=p.parentNode) ;
@@ -285,14 +397,14 @@
 					p.querySelector('table').classList.remove("hidden");
 					(async (vars) => {
 						const sid = vars.symbol;
-						if (!DB[sid]) DB[sid]=new StkData(sid);
-						let result = await DB[sid].get(vars.from,vars.to);
+						if (!App.DB[sid]) App.DB[sid]=new StkData(sid);
+						let result = App.CVs = await App.DB[sid].get(vars.from,vars.to);
 						if (result) {
 							if (result.error) {
 								p.querySelector('table').classList.add("hidden");
 								e.disabled=false;
 							} else {
-								console.log("DEBUG:::",result);
+								// DRAW DATA LIST TABLE
 								const canvas=p.querySelector('[UID="List"]'),
 									temp=p.querySelector('[UID="Template"]');
 								while(canvas.firstChild) canvas.removeChild(canvas.firstChild);
@@ -307,9 +419,16 @@
 										);
 										canvas.appendChild(ne);
 									}
-									chart = new Chart(document.body.querySelector('[UID="Canvas"]'));
 								);
 								e.disabled=false;
+								App.Chart.clear();
+								App.Chart.plotKC(
+									Object.values(result).map((row)=>[row.O,row.C,row.H,row.L]),
+									["#ff4444","#00ff44"]
+								);
+
+								App.Chart.finalized();
+								App.Chart.zoom(document.body.querySelector('[UID="ZoomControl"]').value);
 							}
 						}
 					})(

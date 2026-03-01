@@ -1,0 +1,9 @@
+#!/bin/sh
+cat << MSG | python3 yf.py
+{
+	"Symbol": "2330.TW",
+	"Year": 2026,
+	"Begin": 0,
+	"Interval": "1d"
+}
+MSG

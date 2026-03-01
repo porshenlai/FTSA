@@ -3,7 +3,7 @@
   "Script": "yfinance",
   "Args": {
     "Symbol": "2330.TW",
-    "Year": 2025,
+    "Year": 2026,
 	"Begin": 0,
     "Interval": "1d"
   }
