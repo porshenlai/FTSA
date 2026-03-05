@@ -1,8 +1,15 @@
 #!/bin/sh
 ROOT=$(realpath $0)
 ROOT=${ROOT%/*/*}
-SYSD=/etc/systemd/system
-SYSD=/tmp
+
+case $(uname) in
+MINGW*)
+	SYSD=/tmp
+	;;
+*)
+	SYSD=/etc/systemd/system
+	;;
+esac
 
 function pip() {
 	while True; do
@@ -11,7 +18,7 @@ function pip() {
 		echo ${cmd#\#}
 	done
 }
-grep -h '^#pip ' ${ROOT}/*.py | pip
+# grep -h '^#pip ' ${ROOT}/services/*.py | pip
 
 # Environment="VIRTUAL_ENV=${ROOT}/venv"
 # Environment="PATH=$VIRTUAL_ENV/bin:$PATH"
