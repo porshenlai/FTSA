@@ -13,6 +13,8 @@ function pip() {
 }
 grep -h '^#pip ' ${ROOT}/*.py | pip
 
+# Environment="VIRTUAL_ENV=${ROOT}/venv"
+# Environment="PATH=$VIRTUAL_ENV/bin:$PATH"
 cat << HUB > ${SYSD}/fsta-hub.service
 [Unit]
 Description=FS Hub Server
@@ -20,9 +22,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=${ROOT}
-Environment="VIRTUAL_ENV=${ROOT}/venv"
-Environment="PATH=$VIRTUAL_ENV/bin:$PATH"
-ExecStart=$VIRTUAL_ENV/bin/python3 ${ROOT}/hub_server.py
+ExecStart=${ROOT}/venv/bin/python3 ${ROOT}/hub_server.py
 Restart=always
 User=$(whoami)
 
@@ -30,13 +30,13 @@ User=$(whoami)
 WantedBy=multi-user.target
 HUB
 
+# WorkingDirectory=${ROOT}
 cat << WORKER > ${SYSD}/fsta-worker@.service
 [Unit]
 Description=FS Worker Instance %i
 After=network.target
 
 [Service]
-WorkingDirectory=${ROOT}
 ExecStart=${ROOT}/venv/bin/python3 ${ROOT}/worker_app.py
 Restart=always
 User=$(whoami)
