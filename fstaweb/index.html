@@ -11,7 +11,7 @@
 			padding: 0;
 			height: 100%;
 			width: 100%;
-			overflow: hidden; 
+			overflow: hidden;
 		}
 
 		body {
@@ -111,8 +111,8 @@
 		}
 
 		[UID="Canvas"] {
-    		transform-origin: 50% 50%; /* center of rotation is set to the center of the element */
-    		transform: scale(1,-1);
+			transform-origin: 50% 50%; /* center of rotation is set to the center of the element */
+			transform: scale(1,-1);
 		}
 
 		.hidden {
@@ -168,9 +168,91 @@
 			</div>
 		</div>
 		<div UID="Tags" style='border:1px solid silver;padding:4px;margin:4px 0;'>
-			<div><button act='addTag'>加入</button> TOI 標籤管理區</div><hr/>
+			<div><select hnd='file'>
+				<option value='-'>檔案</option>
+				<option value='load'>載入</option>
+				<option value='commit'>貢獻</option>
+			</select><select hnd='add'>
+				<option value='-'>加入</option>
+				<option value='R'>紅</option>
+				<option value='G'>綠</option>
+				<option value='B'>藍</option>
+			</select>TOI 標籤管理區</div><hr/>
 			<div UID="List">
 			</div>
+			<script>
+				// {{{
+				const e = document.currentScript;
+				e.Handler=new (class {
+					constructor (e) {
+						this.E = e;
+						this.EL = e.querySelector('[UID="List"]');
+						this.SID = undefined;
+						this.Lst = [];
+						this.E.addEventListener("click", (evt)=>{
+							try {
+								let e,f;
+								for (e=evt.target; this.E!==e && !e.hasAttribute("act"); e=e.parentNode);
+								f=e.getAttribute('act');
+								if (f&&this[f]) this[f](e);
+							} catch (x) { }
+							evt.stopPropagation();
+						});
+						this.E.addEventListener("change", (evt)=>{
+							try {
+								let e,f;
+								for (e=evt.target; this.E!==e && !e.hasAttribute("hnd"); e=e.parentNode);
+								f=e.getAttribute('hnd');
+								if(this[f]) this[f](e);
+								else if(this[e.value]) this[e.value](e);
+								e.value="-";
+							} catch (x) { }
+							evt.stopPropagation();
+						});
+					}
+					async flush (sid) {
+						if (this.CT && prompt("Commit tag data ?")) {
+							let pd = this.Lst.reduce((doc,rec) => {
+								if (!(rec.T in doc.TAG)) doc.TAG[rec.T]=[];
+								doc.TAG[rec.T].push(rec.V);
+								return doc;
+							}, {"SID":this.SID,"TAG":{}});
+							const response = await fetch(`http://localhost:8081/tapi?${this.SID}`,pd);
+							const data = await response.json();
+							if (data.status !== "Success" && prompt("Commit failed, continue ?"))
+								return false;
+						}
+						if (sid) {
+							this.SID = sid;
+							this.Lst = [];
+						}
+						return true;
+					}
+					load (e) {
+						console.log("Load", e);
+					}
+					commit (e) {
+						console.log("Commit", e);
+					}
+					add (e) {
+						const key= document.body.querySelector('[UID="RecordData"] [fn="D"]').textContent;
+						this.Lst=this.Lst.filter((v)=>v!==key);
+						this.Lst.push([e.value,key]);
+						this.Lst=this.Lst.sort();
+						App.Chart.clear('T');
+						this.EL.innerHTML=this.Lst.reduce((r,v)=>{
+							App.Chart.plotTag(Object.keys(App.CVs).indexOf(v[1]));
+							return r+`<div TagType="${v[0]}" TagValue="${v[1]}"><button act="remove">X</button><span>${v[0]+":"+v[1]}</span></div>`
+						}, "");
+					}
+					remove (e) {
+						const key=e.parentNode.getAttribute("TagValue");
+						this.Lst.filter((v)=>v!==key);
+						this.EL.removeChild(e.parentNode);
+					}
+				})(e.parentNode);
+				// }}}
+			</script>
 		</div>
 	</aside>
 	<section UID='View'>
@@ -369,27 +451,6 @@
 			let p,e; 
 			for(e=evt.target; !e.hasAttribute("act"); e=e.parentNode);
 			switch (e.getAttribute('act')) {
-			case 'addTag':
-				((list)=>{
-					if (!list.Data) list.Data=[];
-					let key= document.body.querySelector('[UID="RecordData"] [fn="D"]').textContent;
-					list.Data=list.Data.filter((v)=>v!==key);
-					list.Data.push(key);
-					list.Data=list.Data.sort();
-					App.Chart.clear('T');
-					list.innerHTML=list.Data.reduce((r,v)=>{
-						App.Chart.plotTag(Object.keys(App.CVs).indexOf(v));
-						return r+`<div TagValue="${v}"><button act="removeTag">X</button><span>${v}</span></div>`
-					},"");
-				})(document.body.querySelector('[UID="Tags"] [UID="List"]'));
-				break;
-			case 'removeTag':
-				((list)=>{
-					let key=e.parentNode.getAttribute("TagValue");
-					list.Data=list.Data.filter((v)=>v!==key);
-					list.removeChild(e.parentNode);
-				})(document.body.querySelector('[UID="Tags"] [UID="List"]'));
-				break;
 			case 'requestData':
 				try {
 					for (p=e; p.getAttribute("UID")!=="Table"; p=p.parentNode) ;
